@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "tg-to-spotify"
+version = "0.1.0"
+description = "Import music from Telegram and create a Spotify playlist"
+authors = ["Your Name <your@email.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+telethon = "^1.30.3"
+mutagen = "^1.47.0"
+spotipy = "^2.23.0"
+tqdm = "^4.67.1"
+singleton = "^0.1.0"

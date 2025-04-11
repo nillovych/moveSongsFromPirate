@@ -1,0 +1,11 @@
+*/__pycache__
+.git
+.DS_Store
+.envrc
+.gitlab-ci.yml
+.python-version
+.env
+.idea
+
+.cache
+.test_session.session
