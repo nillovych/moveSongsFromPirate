@@ -1,13 +1,14 @@
 from settings import ExportDestination
 from .telegram import TelegramMusicExportClient
 
+# Initialize a Singleton, if test_session exists
+# If you want to cache a session file
+TelegramMusicExportClient.initialize(session="test_session")
+
+# Instantiate client to log in with QRcode
 client = TelegramMusicExportClient.instance()
+client.auth(qr_login=True)
 client.start()
 
-# lybot_query = client.get_songs_data_from_target("@LyBot")
-
-mm_query = client.get_songs_data_from_target("@nillovych")
-print(mm_query.num_unique_songs)
-mm_query.export(destination=ExportDestination.SPOTIFY)
-
-# mm_query.add_to_global_export()
+query = client.get_songs_data_from_target(target="@nillovych")
+query.export(destination=ExportDestination.SPOTIFY)

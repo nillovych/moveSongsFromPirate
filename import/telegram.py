@@ -1,10 +1,20 @@
+import asyncio
 import time
 from collections import defaultdict
+from logging import exception
 
-from singleton.singleton import Singleton
+from telethon.errors import (
+    SessionPasswordNeededError,
+    PasswordHashInvalidError,
+)
+from .exceptions import UnauthorizedError
 from telethon import TelegramClient
+from telethon.sessions import StringSession
 from telethon.tl.types import InputMessagesFilterMusic
 
+from singleton.singleton import Singleton
+
+from .utils import display_url_as_qr
 from settings import TelegramConfig, ExportDestination, UNCLASSIFIED_SONG_KEY_NAME
 
 
@@ -45,15 +55,55 @@ class TelegramQueryResponse(TelegramExport, ResponseDataStatistics):
 
 @Singleton
 class TelegramMusicExportClient(TelegramClient, TelegramExport, ResponseDataStatistics):
-    def __init__(self, **kwargs):
+    def __init__(
+        self,
+        session: str = None,
+        **kwargs,
+    ):
         self._export_data = defaultdict(set)
 
         super().__init__(
-            session="test_session",
+            session=StringSession() if not session else session,
             api_id=TelegramConfig.TELEGRAM_API_ID,
             api_hash=TelegramConfig.TELEGRAM_API_HASH,
             **kwargs,
         )
+
+        if not self.is_connected():
+            self.loop.run_until_complete(self.connect())
+
+    def start(self, *args, **kwargs):
+        if not self.loop.run_until_complete(self.is_user_authorized()):
+            raise UnauthorizedError(
+                "Telegram client is not authorized. Please use auth first."
+            )
+
+        super().start(*args, **kwargs)
+
+    def auth(self, qr_login: bool = False):
+        if qr_login:
+            self.loop.run_until_complete(self._login_with_qr())
+        self.start()
+
+    async def _login_with_qr(self):
+        qr_login = await self.qr_login()
+        print("Is connected:", self.is_connected())
+
+        authorized = False
+        while not authorized:
+            display_url_as_qr(qr_login.url)
+
+            try:
+                authorized = await qr_login.wait(10)
+            except TimeoutError:
+                await qr_login.recreate()
+            except SessionPasswordNeededError:
+                try:
+                    await self.sign_in(password=str(input("Password: ")))
+                    authorized = True
+                except PasswordHashInvalidError:
+                    print("Incorrect password")
+                    break
 
     def get_songs_data_from_target(
         self,

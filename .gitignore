@@ -8,4 +8,4 @@
 .idea
 
 .cache
-.test_session.session
+/test_session.session
