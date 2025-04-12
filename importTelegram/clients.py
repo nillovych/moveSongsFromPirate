@@ -1,7 +1,5 @@
-import asyncio
 import time
 from collections import defaultdict
-from logging import exception
 
 from telethon.errors import (
     SessionPasswordNeededError,
@@ -15,28 +13,14 @@ from telethon.tl.types import InputMessagesFilterMusic
 from singleton.singleton import Singleton
 
 from .utils import display_url_as_qr
-from settings import TelegramConfig, ExportDestination, UNCLASSIFIED_SONG_KEY_NAME
+from settings import TelegramConfig, UNCLASSIFIED_SONG_KEY_NAME
+from .mixins import TelegramExportMixin, ResponseDataStatsMixin
 
 
-class TelegramExport:
-    def export(self, destination: ExportDestination):
-        destination.export(self._export_data)
-
-
-class ResponseDataStatistics:
-    def most_sings_per_performer(self):
-        pass
-
-    @property
-    def found_data(self):
-        return self._export_data
-
-    @property
-    def num_unique_songs(self):
-        return sum(len(s) for s in self._export_data.values())
-
-
-class TelegramQueryResponse(TelegramExport, ResponseDataStatistics):
+class TelegramQueryResponse(
+    TelegramExportMixin,
+    ResponseDataStatsMixin,
+):
     def __init__(
         self,
         num_songs_found,
@@ -53,25 +37,7 @@ class TelegramQueryResponse(TelegramExport, ResponseDataStatistics):
         TelegramMusicExportClient.instance().expand_global_export(self._export_data)
 
 
-@Singleton
-class TelegramMusicExportClient(TelegramClient, TelegramExport, ResponseDataStatistics):
-    def __init__(
-        self,
-        session: str = None,
-        **kwargs,
-    ):
-        self._export_data = defaultdict(set)
-
-        super().__init__(
-            session=StringSession() if not session else session,
-            api_id=TelegramConfig.TELEGRAM_API_ID,
-            api_hash=TelegramConfig.TELEGRAM_API_HASH,
-            **kwargs,
-        )
-
-        if not self.is_connected():
-            self.loop.run_until_complete(self.connect())
-
+class TelegramAuthClient(TelegramClient):
     def start(self, *args, **kwargs):
         if not self.loop.run_until_complete(self.is_user_authorized()):
             raise UnauthorizedError(
@@ -104,6 +70,30 @@ class TelegramMusicExportClient(TelegramClient, TelegramExport, ResponseDataStat
                 except PasswordHashInvalidError:
                     print("Incorrect password")
                     break
+
+
+@Singleton
+class TelegramMusicExportClient(
+    TelegramAuthClient,
+    TelegramExportMixin,
+    ResponseDataStatsMixin,
+):
+    def __init__(
+        self,
+        session: str = None,
+        **kwargs,
+    ):
+        self._export_data = defaultdict(set)
+
+        super().__init__(
+            session=StringSession() if not session else session,
+            api_id=TelegramConfig.TELEGRAM_API_ID,
+            api_hash=TelegramConfig.TELEGRAM_API_HASH,
+            **kwargs,
+        )
+
+        if not self.is_connected():
+            self.loop.run_until_complete(self.connect())
 
     def get_songs_data_from_target(
         self,
