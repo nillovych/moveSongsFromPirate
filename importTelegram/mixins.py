@@ -1,4 +1,4 @@
-from settings import ExportDestination
+from export import ExportDestination
 
 
 class TelegramExportMixin:

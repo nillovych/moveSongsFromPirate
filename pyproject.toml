@@ -14,6 +14,7 @@ tqdm = "^4.67.1"
 singleton = "^0.1.0"
 ytmusicapi = "^1.10.3"
 qrcode = { version = "^8.1", extras = ["pil"] }
+fastapi = "^0.115.12"
 
 [build-system]
 requires = ["poetry-core"]

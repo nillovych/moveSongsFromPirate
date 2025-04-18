@@ -1,3 +1,5 @@
+import asyncio
+import os
 import time
 from collections import defaultdict
 
@@ -5,7 +7,10 @@ from telethon.errors import (
     SessionPasswordNeededError,
     PasswordHashInvalidError,
 )
-from .exceptions import UnauthorizedError
+from .exceptions import (
+    Bad2FAPasswordGiven,
+    UnauthenticatedTelegramClientException,
+)
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.types import InputMessagesFilterMusic
@@ -13,7 +18,7 @@ from telethon.tl.types import InputMessagesFilterMusic
 from singleton.singleton import Singleton
 
 from .utils import display_url_as_qr
-from settings import TelegramConfig, UNCLASSIFIED_SONG_KEY_NAME
+from settings import UNCLASSIFIED_SONG_KEY_NAME
 from .mixins import TelegramExportMixin, ResponseDataStatsMixin
 
 
@@ -37,39 +42,58 @@ class TelegramQueryResponse(
         TelegramMusicExportClient.instance().expand_global_export(self._export_data)
 
 
+class LoginWithQRResult:
+    def __init__(self):
+        self.qr_image = None
+        self.done = None
+        self._update_qr_cb = None
+
+    def set_qr_update_callback(self, func):
+        self._update_qr_cb = func
+
+    def update_qr(self, url):
+        self.qr_image = display_url_as_qr(url)
+        if self._update_qr_cb:
+            self._update_qr_cb(self.qr_image)
+
+
 class TelegramAuthClient(TelegramClient):
-    def start(self, *args, **kwargs):
-        if not self.loop.run_until_complete(self.is_user_authorized()):
-            raise UnauthorizedError(
-                "Telegram client is not authorized. Please use auth first."
-            )
+    def login_with_qr(
+        self,
+        pass_2fa: str = None,
+    ):
+        return self.loop.run_until_complete(self._login_with_qr_async(pass_2fa))
 
-        super().start(*args, **kwargs)
+    async def _login_with_qr_async(
+        self,
+        pass_2fa: str = None,
+        **kwargs,
+    ):
+        result = LoginWithQRResult()
+        qr_login = await self.qr_login(**kwargs)
+        result.update_qr(qr_login.url)
 
-    def auth(self, qr_login: bool = False):
-        if qr_login:
-            self.loop.run_until_complete(self._login_with_qr())
-        self.start()
-
-    async def _login_with_qr(self):
-        qr_login = await self.qr_login()
-        print("Is connected:", self.is_connected())
-
-        authorized = False
-        while not authorized:
-            display_url_as_qr(qr_login.url)
-
-            try:
-                authorized = await qr_login.wait(10)
-            except TimeoutError:
-                await qr_login.recreate()
-            except SessionPasswordNeededError:
+        async def wait():
+            authorized = False
+            while not authorized:
                 try:
-                    await self.sign_in(password=str(input("Password: ")))
-                    authorized = True
-                except PasswordHashInvalidError:
-                    print("Incorrect password")
-                    break
+                    authorized = await qr_login.wait(timeout=5)
+                except TimeoutError:
+                    await qr_login.recreate()
+                    result.update_qr(qr_login.url)
+
+                # if 2FA exists for user
+                except SessionPasswordNeededError:
+                    try:
+                        await self.sign_in(password=pass_2fa, **kwargs)
+                        authorized = True
+                    except PasswordHashInvalidError as e:
+                        raise Bad2FAPasswordGiven() from e
+
+            return True
+
+        result.done = asyncio.ensure_future(wait(), loop=self.loop)
+        return result
 
 
 @Singleton
@@ -81,14 +105,22 @@ class TelegramMusicExportClient(
     def __init__(
         self,
         session: str = None,
+        api_id: str = None,
+        api_hash: str = None,
         **kwargs,
     ):
         self._export_data = defaultdict(set)
 
+        api_id: int = api_id or int(os.getenv("TELEGRAM_API_ID", None))
+        api_hash: str = api_hash or os.getenv("TELEGRAM_API_HASH", None)
+
+        if not api_id or not api_hash:
+            raise UnauthenticatedTelegramClientException()
+
         super().__init__(
             session=StringSession() if not session else session,
-            api_id=TelegramConfig.TELEGRAM_API_ID,
-            api_hash=TelegramConfig.TELEGRAM_API_HASH,
+            api_id=api_id,
+            api_hash=api_hash,
             **kwargs,
         )
 
@@ -98,7 +130,7 @@ class TelegramMusicExportClient(
     def get_songs_data_from_target(
         self,
         target: str,
-        limit: int = 3000,
+        limit: int = 3000,  # optimal
         add_to_global_export: bool = False,
     ) -> TelegramQueryResponse:
 
