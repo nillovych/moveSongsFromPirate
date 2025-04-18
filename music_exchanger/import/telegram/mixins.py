@@ -1,4 +1,4 @@
-from export import ExportDestination
+from music_exchanger.export import ExportDestination
 
 
 class TelegramExportMixin:

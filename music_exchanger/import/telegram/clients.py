@@ -18,7 +18,7 @@ from telethon.tl.types import InputMessagesFilterMusic
 from singleton.singleton import Singleton
 
 from .utils import display_url_as_qr
-from settings import UNCLASSIFIED_SONG_KEY_NAME
+from music_exchanger.settings import UNCLASSIFIED_SONG_KEY_NAME
 from .mixins import TelegramExportMixin, ResponseDataStatsMixin
 
 

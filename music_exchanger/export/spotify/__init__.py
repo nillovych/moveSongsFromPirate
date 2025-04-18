@@ -2,8 +2,8 @@ import logging
 
 from spotipy import Spotify, SpotifyOAuth
 
-from export.utils import polish_song_name
-from settings import SpotifyConfig, UNCLASSIFIED_SONG_KEY_NAME
+from music_exchanger.export.utils import polish_song_name
+from music_exchanger.settings import SpotifyConfig, UNCLASSIFIED_SONG_KEY_NAME
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
