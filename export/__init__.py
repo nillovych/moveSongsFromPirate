@@ -6,7 +6,7 @@ class ExportDestination(Enum):
 
     @property
     def export(self):
-        from spotify import SpotifyExportClient
+        from export.spotify import SpotifyExportClient
 
         __export_callable_mapping = {
             self.SPOTIFY: SpotifyExportClient().export,
